@@ -308,14 +308,9 @@ metadata:
   run_ui: true
 
 test_plan:
-  current_focus:
-    - "User Authentication (Register/Login)"
-    - "AI-Powered Book Analysis"
-    - "Book Upload and PDF Text Extraction"
-    - "Semantic Search with AI"
-    - "Smart Recommendations Engine"
+  current_focus: []
   stuck_tasks: []
-  test_all: true
+  test_all: false
   test_priority: "high_first"
 
 agent_communication:
