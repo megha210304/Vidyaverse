@@ -105,13 +105,13 @@ class BookResponse(BaseModel):
     title: str
     author: str
     content: str
-    grade_level: Optional[str]
-    subject: Optional[str]
-    summary: Optional[str]
-    keywords: List[str]
-    ai_insights: Optional[Dict[str, Any]]
+    grade_level: Optional[str] = None
+    subject: Optional[str] = None
+    summary: Optional[str] = None
+    keywords: List[str] = Field(default_factory=list)
+    ai_insights: Optional[Dict[str, Any]] = None
     created_at: datetime
-    file_type: Optional[str]
+    file_type: Optional[str] = None
 
 class ReadingSession(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
