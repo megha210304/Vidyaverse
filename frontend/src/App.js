@@ -203,9 +203,8 @@ const BookCard = ({ book, onClick }) => (
   </div>
 );
 
-const Dashboard = ({ user: userProp }) => {
-  const { logout } = useAuth();
-  const user = userProp; // Use the passed user prop
+const Dashboard = () => {
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('library');
   const [books, setBooks] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
