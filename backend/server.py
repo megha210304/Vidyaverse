@@ -48,8 +48,11 @@ class User(BaseModel):
     email: EmailStr
     name: str
     password_hash: str
+    grade: Optional[str] = None
+    subjects: List[str] = Field(default_factory=list)
     preferences: Dict[str, Any] = Field(default_factory=dict)
     reading_history: List[str] = Field(default_factory=list)
+    onboarding_completed: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserCreate(BaseModel):
@@ -61,18 +64,27 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class UserOnboarding(BaseModel):
+    grade: str
+    subjects: List[str]
+
 class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    grade: Optional[str]
+    subjects: List[str]
     preferences: Dict[str, Any]
     reading_history: List[str]
+    onboarding_completed: bool
 
 class Book(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     author: str
     content: str
+    grade_level: Optional[str] = None
+    subject: Optional[str] = None
     file_url: Optional[str] = None
     summary: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
@@ -85,12 +97,16 @@ class BookCreate(BaseModel):
     title: str
     author: str
     content: Optional[str] = None
+    grade_level: Optional[str] = None
+    subject: Optional[str] = None
 
 class BookResponse(BaseModel):
     id: str
     title: str
     author: str
     content: str
+    grade_level: Optional[str]
+    subject: Optional[str]
     summary: Optional[str]
     keywords: List[str]
     ai_insights: Optional[Dict[str, Any]]
@@ -177,32 +193,38 @@ async def extract_pdf_text(file_content: bytes) -> str:
     except:
         return "Could not extract text from PDF"
 
-async def get_ai_analysis(content: str, title: str, author: str) -> Dict[str, Any]:
+async def get_ai_analysis(content: str, title: str, author: str, grade_level: str = None, subject: str = None) -> Dict[str, Any]:
     try:
         # Initialize AI chat
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"analysis_{str(uuid.uuid4())}",
-            system_message="You are an expert literary analyst and content summarizer."
+            system_message="You are an expert educational content analyzer and curriculum specialist."
         ).with_model("openai", "gpt-4o-mini")
         
-        # Create analysis prompt
+        # Create enhanced analysis prompt with grade and subject context
         analysis_prompt = f"""
-        Analyze the following book content and provide insights:
+        Analyze the following educational content and provide comprehensive insights:
         
         Title: {title}
         Author: {author}
+        Grade Level: {grade_level or "Not specified"}
+        Subject: {subject or "Not specified"}
         Content: {content[:3000]}...
         
-        Please provide:
+        Please provide detailed analysis:
         1. A concise summary (2-3 sentences)
-        2. Key themes (3-5 themes)
-        3. Main topics covered
-        4. Reading difficulty level (Beginner/Intermediate/Advanced)
-        5. Key insights or takeaways
-        6. Relevant keywords for search
+        2. Key learning objectives and outcomes
+        3. Main topics and concepts covered
+        4. Educational themes and pedagogical approaches
+        5. Appropriate grade level recommendation (1st-10th)
+        6. Subject classification (Mathematics, Science, English, Social Studies, etc.)
+        7. Difficulty level assessment (Beginner/Intermediate/Advanced)
+        8. Key insights and educational value
+        9. Relevant keywords and concepts for search
+        10. Prerequisites or prior knowledge required
         
-        Format as JSON with keys: summary, themes, topics, difficulty, insights, keywords
+        Format as JSON with keys: summary, learning_objectives, topics, themes, recommended_grade, subject_category, difficulty, educational_value, keywords, prerequisites
         """
         
         user_message = UserMessage(text=analysis_prompt)
@@ -215,12 +237,16 @@ async def get_ai_analysis(content: str, title: str, author: str) -> Dict[str, An
         except:
             # Fallback if JSON parsing fails
             ai_data = {
-                "summary": "AI analysis available",
-                "themes": ["General content"],
-                "topics": ["Various topics"],
+                "summary": "Educational content analysis available",
+                "learning_objectives": ["Comprehensive learning experience"],
+                "topics": ["Various educational topics"],
+                "themes": ["Educational content"],
+                "recommended_grade": grade_level or "5th",
+                "subject_category": subject or "General Education",
                 "difficulty": "Intermediate",
-                "insights": ["Engaging content"],
-                "keywords": [title.lower(), author.lower()]
+                "educational_value": "Engaging educational content",
+                "keywords": [title.lower(), author.lower()],
+                "prerequisites": "Basic reading comprehension"
             }
         
         return ai_data
@@ -228,43 +254,53 @@ async def get_ai_analysis(content: str, title: str, author: str) -> Dict[str, An
         logging.error(f"AI analysis failed: {e}")
         return {
             "summary": "Content analysis pending",
-            "themes": [],
+            "learning_objectives": [],
             "topics": [],
+            "themes": [],
+            "recommended_grade": grade_level or "5th",
+            "subject_category": subject or "General",
             "difficulty": "Unknown",
-            "insights": [],
-            "keywords": []
+            "educational_value": "Educational content",
+            "keywords": [],
+            "prerequisites": "None specified"
         }
 
 async def get_semantic_search_results(query: str, user_id: str) -> List[Dict[str, Any]]:
     try:
-        # Get user's reading history for personalization
+        # Get user's reading history and preferences for personalization
         user = await db.users.find_one({"id": user_id})
         reading_history = user.get("reading_history", []) if user else []
+        user_grade = user.get("grade") if user else None
+        user_subjects = user.get("subjects", []) if user else []
         
         # Get all books
         books = await db.books.find().to_list(1000)
         
-        # Use AI to perform semantic search
+        # Use AI to perform semantic search with educational context
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"search_{str(uuid.uuid4())}",
-            system_message="You are a semantic search engine for a digital library."
+            system_message="You are an educational content search engine for a digital library."
         ).with_model("openai", "gpt-4o-mini")
         
         search_prompt = f"""
-        Search Query: "{query}"
-        User Reading History: {reading_history[:10]}
+        Educational Search Query: "{query}"
+        User Profile:
+        - Grade Level: {user_grade or "Not specified"}
+        - Subjects: {user_subjects}
+        - Reading History: {reading_history[:10]}
         
-        Available Books:
-        {[{"id": book["id"], "title": book["title"], "author": book["author"], "summary": book.get("summary", ""), "keywords": book.get("keywords", [])} for book in books[:20]]}
+        Available Educational Content:
+        {[{"id": book["id"], "title": book["title"], "author": book["author"], "grade_level": book.get("grade_level"), "subject": book.get("subject"), "summary": book.get("summary", ""), "keywords": book.get("keywords", [])} for book in books[:20]]}
         
-        Rank these books by relevance to the query. Consider:
-        1. Title and author match
-        2. Summary content relevance
-        3. Keywords match
-        4. User's reading preferences
+        Rank these educational materials by relevance considering:
+        1. Grade level appropriateness for user
+        2. Subject alignment with user's interests
+        3. Title, author, and content relevance
+        4. Educational keywords and concepts
+        5. User's learning progression
         
-        Return top 10 book IDs in order of relevance as a JSON array.
+        Return top 10 book IDs in order of educational relevance as a JSON array.
         """
         
         user_message = UserMessage(text=search_prompt)
@@ -281,14 +317,24 @@ async def get_semantic_search_results(query: str, user_id: str) -> List[Dict[str
                     results.append(book)
             return results
         except:
-            # Fallback to simple text search
+            # Fallback to simple text search with grade filtering
             results = []
             query_lower = query.lower()
             for book in books:
+                # Prioritize books matching user's grade and subjects
+                grade_match = not user_grade or not book.get("grade_level") or book.get("grade_level") == user_grade
+                subject_match = not user_subjects or not book.get("subject") or book.get("subject") in user_subjects
+                
                 if (query_lower in book["title"].lower() or 
                     query_lower in book["author"].lower() or 
                     query_lower in book.get("content", "").lower()[:1000]):
-                    results.append(book)
+                    
+                    # Boost ranking for grade and subject matches
+                    if grade_match and subject_match:
+                        results.insert(0, book)  # Add to front
+                    else:
+                        results.append(book)  # Add to end
+                        
             return results[:10]
             
     except Exception as e:
@@ -303,6 +349,8 @@ async def generate_recommendations(user_id: str) -> Dict[str, Any]:
         
         reading_history = user.get("reading_history", [])
         preferences = user.get("preferences", {})
+        user_grade = user.get("grade")
+        user_subjects = user.get("subjects", [])
         
         # Get books user has read
         read_books = []
@@ -316,29 +364,31 @@ async def generate_recommendations(user_id: str) -> Dict[str, Any]:
         if not unread_books:
             return {"recommended_books": [], "reasoning": "No unread books available"}
         
-        # Use AI for recommendations
+        # Use AI for educational recommendations
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"recommend_{str(uuid.uuid4())}",
-            system_message="You are a book recommendation engine."
+            system_message="You are an educational recommendation engine for personalized learning."
         ).with_model("openai", "gpt-4o-mini")
         
         rec_prompt = f"""
-        User Reading History:
-        {[{"title": book["title"], "author": book["author"], "summary": book.get("summary", "")} for book in read_books]}
+        Student Profile:
+        - Grade Level: {user_grade or "Not specified"}
+        - Preferred Subjects: {user_subjects}
+        - Reading History: {[{"title": book["title"], "author": book["author"], "grade_level": book.get("grade_level"), "subject": book.get("subject")} for book in read_books]}
+        - Additional Preferences: {preferences}
         
-        User Preferences: {preferences}
+        Available Educational Materials:
+        {[{"id": book["id"], "title": book["title"], "author": book["author"], "grade_level": book.get("grade_level"), "subject": book.get("subject"), "summary": book.get("summary", ""), "keywords": book.get("keywords", [])} for book in unread_books[:30]]}
         
-        Available Unread Books:
-        {[{"id": book["id"], "title": book["title"], "author": book["author"], "summary": book.get("summary", ""), "keywords": book.get("keywords", [])} for book in unread_books[:30]]}
+        Recommend 5 educational materials based on:
+        1. Grade level appropriateness and learning progression
+        2. Subject alignment with student interests
+        3. Educational continuity from reading history
+        4. Skill development and knowledge building
+        5. Diverse learning experiences across subjects
         
-        Recommend 5 books based on:
-        1. Similar themes to read books
-        2. User preferences
-        3. Reading progression (difficulty/complexity)
-        4. Diverse topics for exploration
-        
-        Return JSON: {{"book_ids": ["id1", "id2", ...], "reasoning": "explanation"}}
+        Return JSON: {{"book_ids": ["id1", "id2", ...], "reasoning": "educational explanation focusing on learning benefits"}}
         """
         
         user_message = UserMessage(text=rec_prompt)
@@ -349,13 +399,21 @@ async def generate_recommendations(user_id: str) -> Dict[str, Any]:
             rec_data = json.loads(response)
             return {
                 "recommended_books": rec_data.get("book_ids", []),
-                "reasoning": rec_data.get("reasoning", "AI-powered recommendations based on your reading history")
+                "reasoning": rec_data.get("reasoning", f"Personalized educational recommendations for {user_grade or 'your'} grade level")
             }
         except:
-            # Fallback recommendations
+            # Fallback recommendations with grade and subject filtering
+            filtered_books = []
+            for book in unread_books:
+                # Prioritize books matching user's grade and subjects
+                if user_grade and book.get("grade_level") == user_grade:
+                    filtered_books.insert(0, book)
+                elif not user_subjects or book.get("subject") in user_subjects:
+                    filtered_books.append(book)
+                    
             return {
-                "recommended_books": [book["id"] for book in unread_books[:5]],
-                "reasoning": "Personalized recommendations based on available content"
+                "recommended_books": [book["id"] for book in filtered_books[:5]],
+                "reasoning": f"Educational recommendations tailored for {user_grade or 'your'} grade level and preferred subjects"
             }
             
     except Exception as e:
@@ -409,19 +467,52 @@ async def login(login_data: UserLogin):
 async def get_profile(current_user: User = Depends(get_current_user)):
     return UserResponse(**current_user.dict())
 
+@api_router.post("/onboarding")
+async def complete_onboarding(
+    onboarding_data: UserOnboarding,
+    current_user: User = Depends(get_current_user)
+):
+    # Update user with grade and subjects
+    await db.users.update_one(
+        {"id": current_user.id},
+        {
+            "$set": {
+                "grade": onboarding_data.grade,
+                "subjects": onboarding_data.subjects,
+                "onboarding_completed": True
+            }
+        }
+    )
+    
+    # Get updated user
+    updated_user = await db.users.find_one({"id": current_user.id})
+    
+    return {
+        "message": "Onboarding completed successfully",
+        "user": UserResponse(**updated_user)
+    }
+
 # Books Routes
 @api_router.post("/books", response_model=BookResponse)
 async def create_book(
     book_data: BookCreate,
     current_user: User = Depends(get_current_user)
 ):
-    # Get AI analysis
-    ai_insights = await get_ai_analysis(book_data.content or "", book_data.title, book_data.author)
+    # Get AI analysis with educational context
+    ai_insights = await get_ai_analysis(
+        book_data.content or "", 
+        book_data.title, 
+        book_data.author,
+        book_data.grade_level,
+        book_data.subject
+    )
     
     book = Book(
         title=book_data.title,
         author=book_data.author,
         content=book_data.content or "",
+        grade_level=book_data.grade_level or ai_insights.get("recommended_grade"),
+        subject=book_data.subject or ai_insights.get("subject_category"),
         summary=ai_insights.get("summary", ""),
         keywords=ai_insights.get("keywords", []),
         ai_insights=ai_insights,
@@ -436,6 +527,8 @@ async def create_book(
 async def upload_book(
     title: str = Form(...),
     author: str = Form(...),
+    grade_level: str = Form(None),
+    subject: str = Form(None),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
@@ -455,13 +548,15 @@ async def upload_book(
     # Store file as base64
     file_data = base64.b64encode(file_content).decode('utf-8')
     
-    # Get AI analysis
-    ai_insights = await get_ai_analysis(extracted_text, title, author)
+    # Get AI analysis with educational context
+    ai_insights = await get_ai_analysis(extracted_text, title, author, grade_level, subject)
     
     book = Book(
         title=title,
         author=author,
         content=extracted_text,
+        grade_level=grade_level or ai_insights.get("recommended_grade"),
+        subject=subject or ai_insights.get("subject_category"),
         file_url=f"data:{file.content_type};base64,{file_data}",
         summary=ai_insights.get("summary", ""),
         keywords=ai_insights.get("keywords", []),
@@ -474,8 +569,15 @@ async def upload_book(
     return BookResponse(**book.dict())
 
 @api_router.get("/books", response_model=List[BookResponse])
-async def get_books(skip: int = 0, limit: int = 20):
-    books = await db.books.find().skip(skip).limit(limit).to_list(limit)
+async def get_books(skip: int = 0, limit: int = 20, grade: str = None, subject: str = None):
+    # Build filter criteria
+    filter_criteria = {}
+    if grade:
+        filter_criteria["grade_level"] = grade
+    if subject:
+        filter_criteria["subject"] = subject
+    
+    books = await db.books.find(filter_criteria).skip(skip).limit(limit).to_list(limit)
     return [BookResponse(**book) for book in books]
 
 @api_router.get("/books/{book_id}", response_model=BookResponse)
@@ -493,16 +595,30 @@ async def search_books(
     if search_request.semantic:
         results = await get_semantic_search_results(search_request.query, current_user.id)
     else:
-        # Simple text search
+        # Simple text search with user preferences
         query_lower = search_request.query.lower()
-        results = await db.books.find({
+        filter_criteria = {
             "$or": [
                 {"title": {"$regex": query_lower, "$options": "i"}},
                 {"author": {"$regex": query_lower, "$options": "i"}},
                 {"content": {"$regex": query_lower, "$options": "i"}},
-                {"keywords": {"$regex": query_lower, "$options": "i"}}
+                {"keywords": {"$regex": query_lower, "$options": "i"}},
+                {"subject": {"$regex": query_lower, "$options": "i"}}
             ]
-        }).to_list(20)
+        }
+        
+        # Add user grade preference if available
+        if current_user.grade:
+            filter_criteria["$and"] = [
+                {"$or": filter_criteria["$or"]},
+                {"$or": [
+                    {"grade_level": current_user.grade},
+                    {"grade_level": {"$exists": False}}
+                ]}
+            ]
+            del filter_criteria["$or"]
+        
+        results = await db.books.find(filter_criteria).to_list(20)
     
     return {"results": [BookResponse(**book) for book in results]}
 
@@ -536,13 +652,24 @@ async def analyze_book(book_id: str, current_user: User = Depends(get_current_us
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     
-    # Re-analyze with updated AI
-    ai_insights = await get_ai_analysis(book["content"], book["title"], book["author"])
+    # Re-analyze with updated AI and educational context
+    ai_insights = await get_ai_analysis(
+        book["content"], 
+        book["title"], 
+        book["author"],
+        book.get("grade_level"),
+        book.get("subject")
+    )
     
     # Update book with new insights
     await db.books.update_one(
         {"id": book_id},
-        {"$set": {"ai_insights": ai_insights, "summary": ai_insights.get("summary", "")}}
+        {"$set": {
+            "ai_insights": ai_insights, 
+            "summary": ai_insights.get("summary", ""),
+            "grade_level": ai_insights.get("recommended_grade", book.get("grade_level")),
+            "subject": ai_insights.get("subject_category", book.get("subject"))
+        }}
     )
     
     return {"insights": ai_insights}
@@ -619,10 +746,50 @@ async def get_reading_sessions(current_user: User = Depends(get_current_user)):
     sessions = await db.reading_sessions.find({"user_id": current_user.id}).to_list(100)
     return [ReadingSession(**session) for session in sessions]
 
+# Utility Routes
+@api_router.get("/grades")
+async def get_grades():
+    return {
+        "grades": [
+            {"value": "1st", "label": "1st Grade"},
+            {"value": "2nd", "label": "2nd Grade"},
+            {"value": "3rd", "label": "3rd Grade"},
+            {"value": "4th", "label": "4th Grade"},
+            {"value": "5th", "label": "5th Grade"},
+            {"value": "6th", "label": "6th Grade"},
+            {"value": "7th", "label": "7th Grade"},
+            {"value": "8th", "label": "8th Grade"},
+            {"value": "9th", "label": "9th Grade"},
+            {"value": "10th", "label": "10th Grade"}
+        ]
+    }
+
+@api_router.get("/subjects")
+async def get_subjects():
+    return {
+        "subjects": [
+            {"value": "Mathematics", "label": "Mathematics"},
+            {"value": "Science", "label": "Science"},
+            {"value": "English", "label": "English Language Arts"},
+            {"value": "Social Studies", "label": "Social Studies"},
+            {"value": "History", "label": "History"},
+            {"value": "Geography", "label": "Geography"},
+            {"value": "Physics", "label": "Physics"},
+            {"value": "Chemistry", "label": "Chemistry"},
+            {"value": "Biology", "label": "Biology"},
+            {"value": "Computer Science", "label": "Computer Science"},
+            {"value": "Art", "label": "Art & Creativity"},
+            {"value": "Music", "label": "Music"},
+            {"value": "Physical Education", "label": "Physical Education"},
+            {"value": "Health", "label": "Health & Wellness"},
+            {"value": "Foreign Language", "label": "Foreign Language"}
+        ]
+    }
+
 # Health check
 @api_router.get("/")
 async def root():
-    return {"message": "Vidyaverse API is running", "version": "1.0.0"}
+    return {"message": "Vidyaverse API is running", "version": "2.0.0"}
 
 # Include the router in the main app
 app.include_router(api_router)
