@@ -6,9 +6,16 @@ const API_BASE_URL = process.env.REACT_APP_BACKEND_URL;
 // Auth Context
 const AuthContext = createContext();
 
-const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+const AuthProvider = ({ children, initialUser }) => {
+  const [user, setUser] = useState(initialUser);
   const [token, setToken] = useState(localStorage.getItem('token'));
+
+  // Update user when initialUser changes
+  useEffect(() => {
+    if (initialUser) {
+      setUser(initialUser);
+    }
+  }, [initialUser]);
 
   const login = (userData, authToken) => {
     setUser(userData);
