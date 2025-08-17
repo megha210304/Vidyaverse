@@ -24,6 +24,7 @@ class VidyaverseAPITester:
         self.test_user_id = None
         self.test_book_id = None
         self.test_session_id = None
+        self.educational_book_id = None
         self.results = {
             "passed": 0,
             "failed": 0,
