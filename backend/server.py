@@ -50,6 +50,7 @@ class User(BaseModel):
     password_hash: str
     grade: Optional[str] = None
     subjects: List[str] = Field(default_factory=list)
+    selected_textbooks: Dict[str, List[str]] = Field(default_factory=dict)  # {subject: [textbook_ids]}
     preferences: Dict[str, Any] = Field(default_factory=dict)
     reading_history: List[str] = Field(default_factory=list)
     onboarding_completed: bool = False
@@ -68,15 +69,52 @@ class UserOnboarding(BaseModel):
     grade: str
     subjects: List[str]
 
+class TextbookSelection(BaseModel):
+    subject: str
+    textbook_ids: List[str]
+
 class UserResponse(BaseModel):
     id: str
     email: str
     name: str
     grade: Optional[str] = None
     subjects: List[str] = Field(default_factory=list)
+    selected_textbooks: Dict[str, List[str]] = Field(default_factory=dict)
     preferences: Dict[str, Any] = Field(default_factory=dict)
     reading_history: List[str] = Field(default_factory=list)
     onboarding_completed: bool = False
+
+class Textbook(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: str
+    subject: str
+    grade_levels: List[str]
+    author: str
+    publisher: Optional[str] = None
+    isbn: Optional[str] = None
+    chapters: List[Dict[str, Any]] = Field(default_factory=list)
+    difficulty_level: str = "Intermediate"
+    topics_covered: List[str] = Field(default_factory=list)
+    learning_objectives: List[str] = Field(default_factory=list)
+    prerequisites: List[str] = Field(default_factory=list)
+    thumbnail_url: Optional[str] = None
+    content_type: str = "textbook"  # textbook, workbook, reference, guide
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+class TextbookResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    subject: str
+    grade_levels: List[str]
+    author: str
+    publisher: Optional[str] = None
+    chapters: List[Dict[str, Any]] = Field(default_factory=list)
+    difficulty_level: str
+    topics_covered: List[str]
+    learning_objectives: List[str]
+    content_type: str
 
 class Book(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -85,6 +123,8 @@ class Book(BaseModel):
     content: str
     grade_level: Optional[str] = None
     subject: Optional[str] = None
+    textbook_id: Optional[str] = None  # Reference to parent textbook
+    chapter: Optional[str] = None
     file_url: Optional[str] = None
     summary: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
@@ -99,6 +139,8 @@ class BookCreate(BaseModel):
     content: Optional[str] = None
     grade_level: Optional[str] = None
     subject: Optional[str] = None
+    textbook_id: Optional[str] = None
+    chapter: Optional[str] = None
 
 class BookResponse(BaseModel):
     id: str
@@ -107,6 +149,8 @@ class BookResponse(BaseModel):
     content: str
     grade_level: Optional[str] = None
     subject: Optional[str] = None
+    textbook_id: Optional[str] = None
+    chapter: Optional[str] = None
     summary: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
     ai_insights: Optional[Dict[str, Any]] = None
@@ -166,6 +210,172 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+async def initialize_textbooks():
+    """Initialize sample textbooks if they don't exist"""
+    existing_count = await db.textbooks.count_documents({})
+    if existing_count == 0:
+        sample_textbooks = [
+            # Mathematics Textbooks
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Elementary Mathematics - Grade 1",
+                "description": "Introduction to numbers, counting, basic addition and subtraction for first graders.",
+                "subject": "Mathematics",
+                "grade_levels": ["1st"],
+                "author": "Dr. Sarah Chen",
+                "publisher": "EduPress",
+                "chapters": [
+                    {"title": "Counting 1-10", "description": "Learn to count from 1 to 10"},
+                    {"title": "Basic Addition", "description": "Simple addition with pictures"},
+                    {"title": "Basic Subtraction", "description": "Simple subtraction concepts"}
+                ],
+                "difficulty_level": "Beginner",
+                "topics_covered": ["Counting", "Addition", "Subtraction", "Number Recognition"],
+                "learning_objectives": ["Count objects 1-10", "Add single digits", "Subtract single digits"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Algebra Foundations - Grade 7",
+                "description": "Comprehensive introduction to algebraic concepts for middle school students.",
+                "subject": "Mathematics",
+                "grade_levels": ["7th", "8th"],
+                "author": "Prof. Michael Johnson",
+                "publisher": "MathWorld Publishing",
+                "chapters": [
+                    {"title": "Variables and Expressions", "description": "Understanding variables and writing expressions"},
+                    {"title": "Linear Equations", "description": "Solving one-variable linear equations"},
+                    {"title": "Graphing Lines", "description": "Plotting and interpreting linear graphs"}
+                ],
+                "difficulty_level": "Intermediate",
+                "topics_covered": ["Variables", "Equations", "Graphing", "Functions"],
+                "learning_objectives": ["Solve linear equations", "Graph linear functions", "Write algebraic expressions"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            # Science Textbooks
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Exploring Our World - Grade 3 Science",
+                "description": "Hands-on science exploration covering plants, animals, and simple machines.",
+                "subject": "Science",
+                "grade_levels": ["3rd", "4th"],
+                "author": "Dr. Emily Rodriguez",
+                "publisher": "Science Explorer",
+                "chapters": [
+                    {"title": "Living Things", "description": "Plants and animals in our environment"},
+                    {"title": "Simple Machines", "description": "How machines make work easier"},
+                    {"title": "Weather Patterns", "description": "Understanding weather and seasons"}
+                ],
+                "difficulty_level": "Beginner",
+                "topics_covered": ["Life Science", "Physical Science", "Earth Science"],
+                "learning_objectives": ["Identify living vs non-living", "Explain simple machines", "Observe weather patterns"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Physical Science Fundamentals - Grade 8",
+                "description": "Introduction to chemistry and physics concepts for middle school students.",
+                "subject": "Science",
+                "grade_levels": ["8th", "9th"],
+                "author": "Dr. James Wilson",
+                "publisher": "Scientific Press",
+                "chapters": [
+                    {"title": "Matter and Atoms", "description": "Structure of matter and atomic theory"},
+                    {"title": "Forces and Motion", "description": "Newton's laws and motion concepts"},
+                    {"title": "Energy and Waves", "description": "Forms of energy and wave properties"}
+                ],
+                "difficulty_level": "Intermediate",
+                "topics_covered": ["Chemistry", "Physics", "Scientific Method"],
+                "learning_objectives": ["Understand atomic structure", "Apply Newton's laws", "Identify energy types"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            # English Textbooks
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Reading Adventures - Grade 2",
+                "description": "Engaging stories and reading comprehension for second grade students.",
+                "subject": "English",
+                "grade_levels": ["2nd", "3rd"],
+                "author": "Ms. Lisa Thompson",
+                "publisher": "Literary Learning",
+                "chapters": [
+                    {"title": "Short Stories", "description": "Fun and engaging short stories"},
+                    {"title": "Poetry Corner", "description": "Introduction to simple poems"},
+                    {"title": "Reading Skills", "description": "Comprehension and vocabulary building"}
+                ],
+                "difficulty_level": "Beginner",
+                "topics_covered": ["Reading Comprehension", "Vocabulary", "Phonics"],
+                "learning_objectives": ["Read grade-level texts", "Build vocabulary", "Understand story elements"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Literature and Writing - Grade 10",
+                "description": "Advanced literature analysis and creative writing for high school students.",
+                "subject": "English",
+                "grade_levels": ["9th", "10th"],
+                "author": "Prof. David Miller",
+                "publisher": "Academic Press",
+                "chapters": [
+                    {"title": "Classic Literature", "description": "Analysis of classic literary works"},
+                    {"title": "Creative Writing", "description": "Developing original stories and essays"},
+                    {"title": "Poetry Analysis", "description": "Understanding poetic devices and themes"}
+                ],
+                "difficulty_level": "Advanced",
+                "topics_covered": ["Literature Analysis", "Creative Writing", "Poetry"],
+                "learning_objectives": ["Analyze literary themes", "Write creative pieces", "Understand poetry"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            # Social Studies Textbooks
+            {
+                "id": str(uuid.uuid4()),
+                "title": "Our Community - Grade 1 Social Studies",
+                "description": "Learning about families, communities, and basic citizenship.",
+                "subject": "Social Studies",
+                "grade_levels": ["1st", "2nd"],
+                "author": "Ms. Patricia Garcia",
+                "publisher": "Community Learning",
+                "chapters": [
+                    {"title": "My Family", "description": "Understanding family structures and roles"},
+                    {"title": "Our Neighborhood", "description": "Exploring local community helpers"},
+                    {"title": "Rules and Laws", "description": "Basic concepts of rules and fairness"}
+                ],
+                "difficulty_level": "Beginner",
+                "topics_covered": ["Community", "Citizenship", "Geography"],
+                "learning_objectives": ["Identify community helpers", "Understand rules", "Describe neighborhoods"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "title": "World History - Grade 6",
+                "description": "Introduction to ancient civilizations and world cultures.",
+                "subject": "Social Studies",
+                "grade_levels": ["6th", "7th"],
+                "author": "Dr. Robert Anderson",
+                "publisher": "Historical Studies",
+                "chapters": [
+                    {"title": "Ancient Egypt", "description": "Civilization along the Nile River"},
+                    {"title": "Ancient Greece", "description": "Democracy and Greek culture"},
+                    {"title": "Roman Empire", "description": "Rise and fall of Rome"}
+                ],
+                "difficulty_level": "Intermediate",
+                "topics_covered": ["Ancient History", "Civilizations", "Cultural Studies"],
+                "learning_objectives": ["Compare ancient civilizations", "Understand historical timelines", "Analyze cultural impacts"],
+                "content_type": "textbook",
+                "created_at": datetime.utcnow()
+            }
+        ]
+        
+        await db.textbooks.insert_many(sample_textbooks)
+        print(f"✅ Initialized {len(sample_textbooks)} sample textbooks")
 
 async def extract_pdf_text(file_content: bytes) -> str:
     try:
@@ -492,6 +702,71 @@ async def complete_onboarding(
         "user": UserResponse(**updated_user)
     }
 
+@api_router.post("/textbook-selection")
+async def save_textbook_selection(
+    selection_data: TextbookSelection,
+    current_user: User = Depends(get_current_user)
+):
+    # Update user's selected textbooks for the subject
+    await db.users.update_one(
+        {"id": current_user.id},
+        {
+            "$set": {
+                f"selected_textbooks.{selection_data.subject}": selection_data.textbook_ids
+            }
+        }
+    )
+    
+    # Get updated user
+    updated_user = await db.users.find_one({"id": current_user.id})
+    
+    return {
+        "message": "Textbook selection saved successfully",
+        "user": UserResponse(**updated_user)
+    }
+
+# Textbook Routes
+@api_router.get("/textbooks", response_model=List[TextbookResponse])
+async def get_textbooks(
+    subject: Optional[str] = None,
+    grade: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50
+):
+    # Build filter criteria
+    filter_criteria = {}
+    if subject:
+        filter_criteria["subject"] = subject
+    if grade:
+        filter_criteria["grade_levels"] = grade
+    
+    textbooks = await db.textbooks.find(filter_criteria).skip(skip).limit(limit).to_list(limit)
+    return [TextbookResponse(**textbook) for textbook in textbooks]
+
+@api_router.get("/textbooks/{textbook_id}", response_model=TextbookResponse)
+async def get_textbook(textbook_id: str):
+    textbook = await db.textbooks.find_one({"id": textbook_id})
+    if not textbook:
+        raise HTTPException(status_code=404, detail="Textbook not found")
+    return TextbookResponse(**textbook)
+
+@api_router.get("/subjects/{subject}/textbooks", response_model=List[TextbookResponse])
+async def get_subject_textbooks(
+    subject: str,
+    grade: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    # Build filter criteria
+    filter_criteria = {"subject": subject}
+    
+    # If grade is provided, filter by it; otherwise use user's grade
+    target_grade = grade or current_user.grade
+    if target_grade:
+        filter_criteria["grade_levels"] = target_grade
+    
+    textbooks = await db.textbooks.find(filter_criteria).to_list(100)
+    return [TextbookResponse(**textbook) for textbook in textbooks]
+
 # Books Routes
 @api_router.post("/books", response_model=BookResponse)
 async def create_book(
@@ -513,6 +788,8 @@ async def create_book(
         content=book_data.content or "",
         grade_level=book_data.grade_level or ai_insights.get("recommended_grade"),
         subject=book_data.subject or ai_insights.get("subject_category"),
+        textbook_id=book_data.textbook_id,
+        chapter=book_data.chapter,
         summary=ai_insights.get("summary", ""),
         keywords=ai_insights.get("keywords", []),
         ai_insights=ai_insights,
@@ -529,6 +806,8 @@ async def upload_book(
     author: str = Form(...),
     grade_level: str = Form(None),
     subject: str = Form(None),
+    textbook_id: str = Form(None),
+    chapter: str = Form(None),
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user)
 ):
@@ -557,6 +836,8 @@ async def upload_book(
         content=extracted_text,
         grade_level=grade_level or ai_insights.get("recommended_grade"),
         subject=subject or ai_insights.get("subject_category"),
+        textbook_id=textbook_id,
+        chapter=chapter,
         file_url=f"data:{file.content_type};base64,{file_data}",
         summary=ai_insights.get("summary", ""),
         keywords=ai_insights.get("keywords", []),
@@ -569,13 +850,15 @@ async def upload_book(
     return BookResponse(**book.dict())
 
 @api_router.get("/books", response_model=List[BookResponse])
-async def get_books(skip: int = 0, limit: int = 20, grade: str = None, subject: str = None):
+async def get_books(skip: int = 0, limit: int = 20, grade: str = None, subject: str = None, textbook_id: str = None):
     # Build filter criteria
     filter_criteria = {}
     if grade:
         filter_criteria["grade_level"] = grade
     if subject:
         filter_criteria["subject"] = subject
+    if textbook_id:
+        filter_criteria["textbook_id"] = textbook_id
     
     books = await db.books.find(filter_criteria).skip(skip).limit(limit).to_list(limit)
     return [BookResponse(**book) for book in books]
@@ -789,7 +1072,12 @@ async def get_subjects():
 # Health check
 @api_router.get("/")
 async def root():
-    return {"message": "Vidyaverse API is running", "version": "2.0.0"}
+    return {"message": "Vidyaverse API is running", "version": "3.0.0"}
+
+# Initialize textbooks on startup
+@app.on_event("startup")
+async def startup_event():
+    await initialize_textbooks()
 
 # Include the router in the main app
 app.include_router(api_router)

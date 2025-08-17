@@ -408,10 +408,235 @@ const SubjectSelection = ({ grade, onComplete }) => {
               disabled={selectedSubjects.length === 0 || loading}
               className="bg-gradient-to-r from-purple-600 to-pink-600 text-white py-3 px-8 rounded-lg hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 font-semibold text-lg"
             >
-              {loading ? 'Setting up your library...' : 'Start Learning!'}
+              {loading ? 'Setting up your library...' : 'Continue'}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+const TextbookSelection = ({ grade, subject, onComplete, onBack }) => {
+  const [selectedTextbooks, setSelectedTextbooks] = useState([]);
+  const [textbooks, setTextbooks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTextbooks = async () => {
+      try {
+        setPageLoading(true);
+        const result = await apiCall(`/subjects/${subject}/textbooks?grade=${grade}`);
+        setTextbooks(result || []);
+      } catch (error) {
+        console.error('Failed to load textbooks:', error);
+        setTextbooks([]);
+      } finally {
+        setPageLoading(false);
+      }
+    };
+
+    fetchTextbooks();
+  }, [subject, grade]);
+
+  const toggleTextbook = (textbookId) => {
+    setSelectedTextbooks(prev => 
+      prev.includes(textbookId)
+        ? prev.filter(id => id !== textbookId)
+        : [...prev, textbookId]
+    );
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (selectedTextbooks.length === 0) return;
+
+    setLoading(true);
+    try {
+      // Save textbook selection
+      await apiCall('/textbook-selection', {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: subject,
+          textbook_ids: selectedTextbooks
+        }),
+      });
+      
+      onComplete(subject, selectedTextbooks);
+    } catch (error) {
+      console.error('Failed to save textbook selection:', error);
+      alert('Failed to save selection: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getSubjectIcon = (subject) => {
+    const icons = {
+      'Mathematics': '🔢',
+      'Science': '🔬',
+      'English': '📝',
+      'Social Studies': '🌍',
+      'History': '🏛️',
+      'Geography': '🗺️',
+      'Physics': '⚡',
+      'Chemistry': '⚗️',
+      'Biology': '🧬',
+      'Computer Science': '💻',
+      'Art': '🎨',
+      'Music': '🎵'
+    };
+    return icons[subject] || '📚';
+  };
+
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'beginner': return 'bg-green-100 text-green-800';
+      case 'intermediate': return 'bg-yellow-100 text-yellow-800';
+      case 'advanced': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+          <div className="text-gray-600">Loading {subject} textbooks...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4">
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
+          <div className="text-center mb-8">
+            <div className="text-6xl mb-4">{getSubjectIcon(subject)}</div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">
+              {subject} Textbooks
+            </h1>
+            <p className="text-gray-600 text-lg mb-2">Choose textbooks for your {grade} {subject} journey</p>
+            <p className="text-sm text-emerald-600 font-medium">Grade: {grade}</p>
+            
+            <button
+              onClick={onBack}
+              className="mt-4 text-emerald-600 hover:text-emerald-800 text-sm font-medium flex items-center mx-auto"
+            >
+              ← Back to subjects
+            </button>
+          </div>
+
+          {textbooks.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-gray-400 text-6xl mb-4">📚</div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No textbooks available</h3>
+              <p className="text-gray-600 mb-4">We'll add more textbooks for {subject} soon!</p>
+              <button
+                onClick={onBack}
+                className="bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Choose Another Subject
+              </button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {textbooks.map((textbook) => (
+                  <div
+                    key={textbook.id}
+                    onClick={() => toggleTextbook(textbook.id)}
+                    className={`cursor-pointer border-2 rounded-xl p-6 transition-all duration-200 ${
+                      selectedTextbooks.includes(textbook.id)
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white border-emerald-600 scale-105 shadow-lg'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-emerald-300 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="font-bold text-lg mb-2">{textbook.title}</h3>
+                        <p className="text-sm opacity-90 mb-2">by {textbook.author}</p>
+                        {textbook.publisher && (
+                          <p className="text-xs opacity-75">{textbook.publisher}</p>
+                        )}
+                      </div>
+
+                      <p className="text-sm opacity-90 leading-relaxed">
+                        {textbook.description}
+                      </p>
+
+                      <div className="flex flex-wrap gap-2">
+                        <span className={`px-2 py-1 text-xs rounded-full ${getDifficultyColor(textbook.difficulty_level)}`}>
+                          {textbook.difficulty_level}
+                        </span>
+                        <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
+                          {textbook.content_type}
+                        </span>
+                      </div>
+
+                      {textbook.chapters && textbook.chapters.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-2">Chapters:</p>
+                          <div className="space-y-1">
+                            {textbook.chapters.slice(0, 3).map((chapter, index) => (
+                              <p key={index} className="text-xs opacity-80">
+                                • {chapter.title}
+                              </p>
+                            ))}
+                            {textbook.chapters.length > 3 && (
+                              <p className="text-xs opacity-60">
+                                + {textbook.chapters.length - 3} more chapters
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {textbook.learning_objectives && textbook.learning_objectives.length > 0 && (
+                        <div>
+                          <p className="text-sm font-medium mb-2">Learning Goals:</p>
+                          <div className="space-y-1">
+                            {textbook.learning_objectives.slice(0, 2).map((objective, index) => (
+                              <p key={index} className="text-xs opacity-80">
+                                • {objective}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-center mt-8">
+                <p className="text-sm text-gray-500 mb-4">
+                  Selected: {selectedTextbooks.length} textbook{selectedTextbooks.length !== 1 ? 's' : ''}
+                </p>
+                
+                <div className="flex justify-center space-x-4">
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="bg-gray-500 text-white py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={selectedTextbooks.length === 0 || loading}
+                    className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white py-3 px-8 rounded-lg hover:from-emerald-700 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 font-semibold text-lg"
+                  >
+                    {loading ? 'Saving...' : 'Continue with Selected Books'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -943,6 +1168,8 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [onboardingStep, setOnboardingStep] = useState(null);
   const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedSubjects, setSelectedSubjects] = useState([]);
+  const [currentSubjectIndex, setCurrentSubjectIndex] = useState(0);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -982,8 +1209,8 @@ const App = () => {
 
   const handleSubjectSelection = async (subjects) => {
     try {
-      // Complete onboarding
-      const result = await apiCall('/onboarding', {
+      // Complete basic onboarding first
+      await apiCall('/onboarding', {
         method: 'POST',
         body: JSON.stringify({
           grade: selectedGrade,
@@ -991,13 +1218,45 @@ const App = () => {
         }),
       });
 
-      // Update user data
-      setUser(result.user);
-      setOnboardingStep(null);
+      // Now start subject-specific textbook selection
+      setSelectedSubjects(subjects);
+      setCurrentSubjectIndex(0);
+      
+      if (subjects.length > 0) {
+        setOnboardingStep('textbooks');
+      } else {
+        // If no subjects selected, skip to dashboard
+        const result = await apiCall('/profile');
+        setUser(result);
+        setOnboardingStep(null);
+      }
     } catch (error) {
       console.error('Onboarding failed:', error);
       alert('Failed to complete setup: ' + error.message);
     }
+  };
+
+  const handleTextbookSelection = async (subject, textbookIds) => {
+    try {
+      // Move to next subject or complete onboarding
+      const nextIndex = currentSubjectIndex + 1;
+      
+      if (nextIndex < selectedSubjects.length) {
+        setCurrentSubjectIndex(nextIndex);
+      } else {
+        // All subjects completed, go to dashboard
+        const result = await apiCall('/profile');
+        setUser(result);
+        setOnboardingStep(null);
+      }
+    } catch (error) {
+      console.error('Failed to complete textbook selection:', error);
+    }
+  };
+
+  const handleBackToSubjects = () => {
+    setOnboardingStep('subjects');
+    setCurrentSubjectIndex(0);
   };
 
   if (loading) {
@@ -1019,6 +1278,13 @@ const App = () => {
         <GradeSelection onComplete={handleGradeSelection} />
       ) : onboardingStep === 'subjects' ? (
         <SubjectSelection grade={selectedGrade} onComplete={handleSubjectSelection} />
+      ) : onboardingStep === 'textbooks' ? (
+        <TextbookSelection 
+          grade={selectedGrade} 
+          subject={selectedSubjects[currentSubjectIndex]}
+          onComplete={handleTextbookSelection}
+          onBack={handleBackToSubjects}
+        />
       ) : (
         <Dashboard />
       )}
