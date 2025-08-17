@@ -833,7 +833,7 @@ class VidyaverseAPITester:
     
     def run_all_tests(self):
         """Run all backend tests"""
-        print("🚀 Starting Vidyaverse Backend API Tests")
+        print("🚀 Starting Vidyaverse Educational Backend API Tests")
         print(f"Testing against: {self.base_url}")
         print("=" * 60)
         
@@ -845,7 +845,26 @@ class VidyaverseAPITester:
         self.test_invalid_login()
         self.test_protected_route_access()
         
-        # AI-powered features (HIGH PRIORITY)
+        # NEW EDUCATIONAL ONBOARDING SYSTEM TESTS (HIGH PRIORITY)
+        print("\n🎓 Testing Educational Onboarding System...")
+        self.test_grades_endpoint()
+        self.test_subjects_endpoint()
+        self.test_educational_onboarding()
+        self.test_educational_profile_verification()
+        
+        # Educational Content Management Tests
+        print("\n📚 Testing Educational Content Management...")
+        self.test_educational_book_creation()
+        self.test_educational_book_filtering()
+        
+        # Educational AI Features Tests
+        print("\n🤖 Testing Educational AI Features...")
+        self.test_educational_semantic_search()
+        self.test_educational_recommendations()
+        self.test_educational_ai_analysis()
+        
+        # Original AI-powered features
+        print("\n🔍 Testing Core AI Features...")
         self.test_book_creation_with_ai()
         self.test_semantic_search()
         self.test_ai_recommendations()
