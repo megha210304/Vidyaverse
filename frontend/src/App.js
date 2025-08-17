@@ -617,7 +617,7 @@ const App = () => {
   }
 
   return (
-    <AuthProvider>
+    <AuthProvider initialUser={user}>
       {user ? <Dashboard /> : <LoginForm onSuccess={handleLogin} />}
     </AuthProvider>
   );
