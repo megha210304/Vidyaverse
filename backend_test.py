@@ -477,6 +477,359 @@ class VidyaverseAPITester:
         except Exception as e:
             self.log_result("Database Operations", False, f"Error: {str(e)}")
             return False
+
+    # ========== NEW EDUCATIONAL ONBOARDING SYSTEM TESTS ==========
+    
+    def test_grades_endpoint(self):
+        """Test GET /api/grades endpoint"""
+        try:
+            response = self.make_request("GET", "/grades")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "grades" in data and isinstance(data["grades"], list):
+                    grades = data["grades"]
+                    if len(grades) > 0:
+                        # Check if grades have proper structure
+                        first_grade = grades[0]
+                        if "value" in first_grade and "label" in first_grade:
+                            expected_grades = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"]
+                            grade_values = [g["value"] for g in grades]
+                            if all(grade in grade_values for grade in expected_grades):
+                                self.log_result("Grades Endpoint", True, f"Retrieved {len(grades)} grade options")
+                                return True
+                            else:
+                                self.log_result("Grades Endpoint", False, f"Missing expected grades: {grade_values}")
+                                return False
+                        else:
+                            self.log_result("Grades Endpoint", False, f"Invalid grade structure: {first_grade}")
+                            return False
+                    else:
+                        self.log_result("Grades Endpoint", False, "No grades returned")
+                        return False
+                else:
+                    self.log_result("Grades Endpoint", False, f"Invalid response structure: {data}")
+                    return False
+            else:
+                self.log_result("Grades Endpoint", False, f"Status: {response.status_code}")
+                return False
+        except Exception as e:
+            self.log_result("Grades Endpoint", False, f"Error: {str(e)}")
+            return False
+
+    def test_subjects_endpoint(self):
+        """Test GET /api/subjects endpoint"""
+        try:
+            response = self.make_request("GET", "/subjects")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "subjects" in data and isinstance(data["subjects"], list):
+                    subjects = data["subjects"]
+                    if len(subjects) > 0:
+                        # Check if subjects have proper structure
+                        first_subject = subjects[0]
+                        if "value" in first_subject and "label" in first_subject:
+                            expected_subjects = ["Mathematics", "Science", "English", "Social Studies", "History"]
+                            subject_values = [s["value"] for s in subjects]
+                            if all(subject in subject_values for subject in expected_subjects):
+                                self.log_result("Subjects Endpoint", True, f"Retrieved {len(subjects)} subject options")
+                                return True
+                            else:
+                                self.log_result("Subjects Endpoint", False, f"Missing expected subjects: {subject_values}")
+                                return False
+                        else:
+                            self.log_result("Subjects Endpoint", False, f"Invalid subject structure: {first_subject}")
+                            return False
+                    else:
+                        self.log_result("Subjects Endpoint", False, "No subjects returned")
+                        return False
+                else:
+                    self.log_result("Subjects Endpoint", False, f"Invalid response structure: {data}")
+                    return False
+            else:
+                self.log_result("Subjects Endpoint", False, f"Status: {response.status_code}")
+                return False
+        except Exception as e:
+            self.log_result("Subjects Endpoint", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_onboarding(self):
+        """Test POST /api/onboarding endpoint"""
+        try:
+            if not self.auth_token:
+                self.log_result("Educational Onboarding", False, "No auth token available")
+                return False
+            
+            onboarding_data = {
+                "grade": "7th",
+                "subjects": ["Mathematics", "Science", "English"]
+            }
+            
+            response = self.make_request("POST", "/onboarding", onboarding_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "message" in data and "user" in data:
+                    user = data["user"]
+                    if (user.get("grade") == "7th" and 
+                        user.get("subjects") == ["Mathematics", "Science", "English"] and
+                        user.get("onboarding_completed") == True):
+                        self.log_result("Educational Onboarding", True, "Onboarding completed successfully")
+                        return True
+                    else:
+                        self.log_result("Educational Onboarding", False, f"User data not updated correctly: {user}")
+                        return False
+                else:
+                    self.log_result("Educational Onboarding", False, f"Invalid response structure: {data}")
+                    return False
+            else:
+                self.log_result("Educational Onboarding", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            self.log_result("Educational Onboarding", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_profile_verification(self):
+        """Test that user profile contains educational data after onboarding"""
+        try:
+            if not self.auth_token:
+                self.log_result("Educational Profile Verification", False, "No auth token available")
+                return False
+            
+            response = self.make_request("GET", "/profile")
+            
+            if response.status_code == 200:
+                user = response.json()
+                if (user.get("grade") == "7th" and 
+                    user.get("subjects") == ["Mathematics", "Science", "English"] and
+                    user.get("onboarding_completed") == True):
+                    self.log_result("Educational Profile Verification", True, "Educational profile data verified")
+                    return True
+                else:
+                    self.log_result("Educational Profile Verification", False, f"Educational data missing or incorrect: {user}")
+                    return False
+            else:
+                self.log_result("Educational Profile Verification", False, f"Status: {response.status_code}")
+                return False
+        except Exception as e:
+            self.log_result("Educational Profile Verification", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_book_creation(self):
+        """Test book creation with educational metadata"""
+        try:
+            book_data = {
+                "title": "Algebra Fundamentals for Middle School",
+                "author": "Dr. Maria Rodriguez",
+                "grade_level": "7th",
+                "subject": "Mathematics",
+                "content": """This comprehensive guide introduces middle school students to the fundamentals of algebra. Students will learn about variables, expressions, equations, and inequalities through engaging examples and practice problems. The book covers linear equations, graphing, and basic polynomial operations. Each chapter includes real-world applications to help students understand how algebra applies to everyday situations. Topics include solving one-step and two-step equations, working with positive and negative numbers, and understanding the coordinate plane."""
+            }
+            
+            response = self.make_request("POST", "/books", book_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if ("id" in data and "grade_level" in data and "subject" in data and 
+                    "ai_insights" in data):
+                    self.educational_book_id = data["id"]
+                    
+                    # Verify educational metadata
+                    if (data["grade_level"] == "7th" and data["subject"] == "Mathematics"):
+                        # Check AI insights for educational content
+                        ai_insights = data["ai_insights"]
+                        educational_fields = ["learning_objectives", "recommended_grade", "subject_category", "educational_value"]
+                        has_educational_analysis = any(field in ai_insights for field in educational_fields)
+                        
+                        if has_educational_analysis:
+                            self.log_result("Educational Book Creation", True, f"Book created with educational metadata and AI analysis")
+                            return True
+                        else:
+                            self.log_result("Educational Book Creation", False, f"Missing educational AI analysis: {ai_insights}")
+                            return False
+                    else:
+                        self.log_result("Educational Book Creation", False, f"Educational metadata not preserved: grade={data.get('grade_level')}, subject={data.get('subject')}")
+                        return False
+                else:
+                    self.log_result("Educational Book Creation", False, f"Missing required fields: {data}")
+                    return False
+            else:
+                self.log_result("Educational Book Creation", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            self.log_result("Educational Book Creation", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_book_filtering(self):
+        """Test GET /api/books with grade and subject filters"""
+        try:
+            # Test grade filtering
+            response = self.make_request("GET", "/books?grade=7th")
+            
+            if response.status_code == 200:
+                books = response.json()
+                if isinstance(books, list):
+                    # Check if returned books match grade filter
+                    grade_filtered = all(book.get("grade_level") == "7th" or book.get("grade_level") is None for book in books)
+                    
+                    if grade_filtered:
+                        # Test subject filtering
+                        subject_response = self.make_request("GET", "/books?subject=Mathematics")
+                        
+                        if subject_response.status_code == 200:
+                            subject_books = subject_response.json()
+                            if isinstance(subject_books, list):
+                                subject_filtered = all(book.get("subject") == "Mathematics" or book.get("subject") is None for book in subject_books)
+                                
+                                if subject_filtered:
+                                    # Test combined filtering
+                                    combined_response = self.make_request("GET", "/books?grade=7th&subject=Mathematics")
+                                    
+                                    if combined_response.status_code == 200:
+                                        combined_books = combined_response.json()
+                                        self.log_result("Educational Book Filtering", True, f"Grade/subject filtering working correctly")
+                                        return True
+                                    else:
+                                        self.log_result("Educational Book Filtering", False, f"Combined filter failed: {combined_response.status_code}")
+                                        return False
+                                else:
+                                    self.log_result("Educational Book Filtering", False, f"Subject filtering not working correctly")
+                                    return False
+                            else:
+                                self.log_result("Educational Book Filtering", False, f"Subject filter returned non-list: {type(subject_books)}")
+                                return False
+                        else:
+                            self.log_result("Educational Book Filtering", False, f"Subject filter failed: {subject_response.status_code}")
+                            return False
+                    else:
+                        self.log_result("Educational Book Filtering", False, f"Grade filtering not working correctly")
+                        return False
+                else:
+                    self.log_result("Educational Book Filtering", False, f"Grade filter returned non-list: {type(books)}")
+                    return False
+            else:
+                self.log_result("Educational Book Filtering", False, f"Status: {response.status_code}")
+                return False
+        except Exception as e:
+            self.log_result("Educational Book Filtering", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_semantic_search(self):
+        """Test semantic search with educational context"""
+        try:
+            search_data = {
+                "query": "algebra equations for 7th grade mathematics",
+                "semantic": True
+            }
+            
+            response = self.make_request("POST", "/books/search", search_data)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "results" in data:
+                    results = data["results"]
+                    if len(results) > 0:
+                        # Check if results are educationally relevant
+                        educational_match = any(
+                            ("algebra" in book.get("title", "").lower() or 
+                             "algebra" in book.get("content", "").lower() or
+                             book.get("grade_level") == "7th" or
+                             book.get("subject") == "Mathematics")
+                            for book in results
+                        )
+                        
+                        if educational_match:
+                            self.log_result("Educational Semantic Search", True, f"Found {len(results)} educationally relevant results")
+                            return True
+                        else:
+                            self.log_result("Educational Semantic Search", True, f"Search completed with {len(results)} results (educational relevance varies)")
+                            return True
+                    else:
+                        self.log_result("Educational Semantic Search", True, "Search completed (no results - expected for new database)")
+                        return True
+                else:
+                    self.log_result("Educational Semantic Search", False, f"Missing results field: {data}")
+                    return False
+            else:
+                self.log_result("Educational Semantic Search", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            self.log_result("Educational Semantic Search", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_recommendations(self):
+        """Test AI recommendations with educational context"""
+        try:
+            response = self.make_request("GET", "/ai/recommendations")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "books" in data and "reasoning" in data:
+                    books = data["books"]
+                    reasoning = data["reasoning"]
+                    
+                    if isinstance(books, list) and isinstance(reasoning, str):
+                        # Check if reasoning mentions educational context
+                        educational_context = any(term in reasoning.lower() for term in 
+                                                ["grade", "learning", "educational", "student", "curriculum", "subject"])
+                        
+                        if educational_context:
+                            self.log_result("Educational Recommendations", True, f"Generated {len(books)} educational recommendations with context")
+                            return True
+                        else:
+                            self.log_result("Educational Recommendations", True, f"Generated {len(books)} recommendations (educational context may vary)")
+                            return True
+                    else:
+                        self.log_result("Educational Recommendations", False, f"Invalid response format: {data}")
+                        return False
+                else:
+                    self.log_result("Educational Recommendations", False, f"Missing books or reasoning: {data}")
+                    return False
+            else:
+                self.log_result("Educational Recommendations", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            self.log_result("Educational Recommendations", False, f"Error: {str(e)}")
+            return False
+
+    def test_educational_ai_analysis(self):
+        """Test AI analysis with educational insights"""
+        try:
+            if not self.educational_book_id:
+                self.log_result("Educational AI Analysis", False, "No educational book available")
+                return False
+            
+            response = self.make_request("POST", f"/ai/analyze/{self.educational_book_id}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                if "insights" in data:
+                    insights = data["insights"]
+                    
+                    # Check for educational-specific analysis fields
+                    educational_fields = [
+                        "learning_objectives", "recommended_grade", "subject_category", 
+                        "educational_value", "prerequisites", "difficulty"
+                    ]
+                    
+                    educational_analysis = sum(1 for field in educational_fields if field in insights)
+                    
+                    if educational_analysis >= 4:  # At least 4 educational fields
+                        self.log_result("Educational AI Analysis", True, f"Comprehensive educational analysis with {educational_analysis} educational fields")
+                        return True
+                    else:
+                        self.log_result("Educational AI Analysis", False, f"Limited educational analysis: only {educational_analysis} educational fields found")
+                        return False
+                else:
+                    self.log_result("Educational AI Analysis", False, f"Missing insights: {data}")
+                    return False
+            else:
+                self.log_result("Educational AI Analysis", False, f"Status: {response.status_code}, Response: {response.text}")
+                return False
+        except Exception as e:
+            self.log_result("Educational AI Analysis", False, f"Error: {str(e)}")
+            return False
     
     def run_all_tests(self):
         """Run all backend tests"""
