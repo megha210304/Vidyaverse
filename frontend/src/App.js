@@ -68,6 +68,7 @@ const apiCall = async (endpoint, options = {}) => {
 
 // Components
 const LoginForm = ({ onSuccess }) => {
+  const { login } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
@@ -89,6 +90,8 @@ const LoginForm = ({ onSuccess }) => {
         body: JSON.stringify(formData),
       });
 
+      // Use AuthContext login method
+      login(result.user, result.token);
       onSuccess(result.user, result.token);
     } catch (err) {
       setError(err.message);
