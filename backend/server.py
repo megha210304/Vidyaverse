@@ -72,11 +72,11 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
-    grade: Optional[str]
-    subjects: List[str]
-    preferences: Dict[str, Any]
-    reading_history: List[str]
-    onboarding_completed: bool
+    grade: Optional[str] = None
+    subjects: List[str] = Field(default_factory=list)
+    preferences: Dict[str, Any] = Field(default_factory=dict)
+    reading_history: List[str] = Field(default_factory=list)
+    onboarding_completed: bool = False
 
 class Book(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
