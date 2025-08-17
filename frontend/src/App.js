@@ -602,6 +602,7 @@ const App = () => {
 
   const handleLogin = (userData, token) => {
     setUser(userData);
+    localStorage.setItem('token', token);
   };
 
   if (loading) {
