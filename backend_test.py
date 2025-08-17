@@ -387,15 +387,10 @@ class VidyaverseAPITester:
                 if "id" in session_data and "user_id" in session_data:
                     self.test_session_id = session_data["id"]
                     
-                    # Update reading session
-                    update_data = {
-                        "progress": 0.25,
-                        "notes": "Interesting insights about problem-solving methodology",
-                        "bookmarks": [150, 300],
-                        "reading_time": 45
-                    }
+                    # Update reading session (using query parameters as per API design)
+                    update_url = f"/reading/session/{self.test_session_id}?progress=0.25&notes=Interesting insights&reading_time=45"
                     
-                    update_response = self.make_request("PUT", f"/reading/session/{self.test_session_id}", update_data)
+                    update_response = self.make_request("PUT", update_url)
                     
                     if update_response.status_code == 200:
                         updated_session = update_response.json()
